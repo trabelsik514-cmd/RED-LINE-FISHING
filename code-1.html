@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Line Fishing</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Cairo',sans-serif;background:#0A1830;color:#fff;padding:60px 15px 20px}
+nav{position:fixed;top:0;right:0;left:0;display:flex;background:#12315C;border-bottom:2px solid #ff2d3a;z-index:1000;overflow-x:auto}
+nav button{flex:1;padding:13px 4px;background:none;border:none;color:#B8CCE8;font-family:inherit;font-size:11px;cursor:pointer;white-space:nowrap}
+nav button.on{color:#ff5b6e;font-weight:700}
+header{background:linear-gradient(135deg,#16407E,#0C2650);padding:20px;border-radius:0 0 24px 24px;text-align:center;margin-bottom:15px}
+header h1{color:#ff5b6e;font-size:24px}
+#status{display:inline-block;font-size:12px;padding:4px 14px;margin-top:8px;border-radius:20px;background:rgba(255,255,255,.2)}
+#status.ok{background:rgba(0,120,90,.5)}
+.card{background:#12315C;border:1px solid #2C5288;border-radius:14px;padding:15px;margin-bottom:12px}
+h3{color:#ff6b7a;margin-bottom:8px;font-size:16px}
+input{width:100%;padding:11px;margin-bottom:8px;border-radius:10px;border:1px solid #2C5288;background:#0E2344;color:#fff;font-family:inherit}
+.btn{width:100%;padding:12px;border:none;border-radius:10px;background:#ff2d3a;color:#fff;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer}
+.btn2{padding:7px 14px;margin-top:8px;border-radius:8px;border:none;background:#2C5288;color:#ff8a94;font-weight:700;font-family:inherit;cursor:pointer}
+.tip{font-size:14px;line-height:1.7;color:#D9E6F7}
+.gold{color:#FFDF80;font-weight:700}.green{color:#3DE8C4;font-weight:700}.red{color:#ff8a94;font-weight:700}
+.page{display:none}.page.on{display:block}
+.item{display:flex;justify-content:space-between;align-items:center;background:#0E2344;border-radius:10px;padding:10px;margin-bottom:6px;flex-wrap:wrap}
+.item button{background:none;border:none;color:#ff8a94;font-size:17px;cursor:pointer}
+#clock{font-size:32px;font-weight:800;color:#ff5b6e;letter-spacing:2px}
+.row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1 solid #2C5288;font-size:14px}
+.row b{color:#ff8a94}
+#map{height:380px;border-radius:14px;border:1px solid #2C5288;z-index:1}
+#report{display:none}
+.verdict{text-align:center;font-size:17px;font-weight:800;padding:10px;border-radius:10px;margin-top:8px}
+.v-good{background:rgba(61,232,196,.15);color:#3DE8C4}
+.v-mid{background:rgba(255,223,128,.12);color:#FFDF80}
+.v-bad{background:rgba(255,91,110,.12);color:#ff8a94}
+.ticker{overflow:hidden;background:#0E2344;border-radius:10px;border:1px solid #2C5288;direction:ltr}
+.ticker-inner{display:inline-block;white-space:nowrap;padding:10px 0;animation:tick 90s linear infinite}
+.ticker:active .ticker-inner{animation-play-state:paused}
+@keyframes tick{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
+.tk{display:inline-block;margin:0 25px;font-size:14px;font-weight:700;direction:rtl}
+.moonbox{text-align:center}
+.moonbox .mi{font-size:48px}.moonbox .mt{font-weight:800;color:#FFDF80}
+.moonbox .md{font-size:13px;color:#D9E6F7;margin-top:4px}
+.catchphoto{width:100%;max-height:200px;object-fit:cover;border-radius:10px;margin:6px 0}
+.port{background:#0E2344;border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer}
+#msgs{max-height:400px;overflow-y:auto}
+/* ✅ إصلاح: إخفاء شعار Netlify بـ CSS — أخف وأضمن من السكريبت المتكرر */
+netlify-badge,[data-netlify-badge]{display:none !important}
+</style>
+</head>
+<body>
+
+<nav>
+<button class="on" onclick="go('home',this)">🏠 الرئيسية</button>
+<button onclick="go('ports',this)">⚓ الموانئ</button>
+<button onclick="go('map',this)">🗺️ الخريطة</button>
+<button onclick="go('baits',this)">🪱 الطعوم</button>
+<button onclick="go('chat',this)">💬 الشات</button>
+<button onclick="go('log',this)">📖 السجل</button>
+</nav>
+
+<header>
+<h1>RED LINE FISHING</h1>
+<p>مساعدك الذكي للصيد في البحر المتوسط</p>
+<div id="status">⏳ جاري الاتصال...</div>
+</header>
+
+<section class="page on" id="p-home">
+<div class="card"><h3>📅 توقعات 7 أيام — مباشر 🔴</h3>
+<div class="ticker"><div class="ticker-inner" id="fcStrip">⏳ جاري الجلب...</div></div></div>
+<div class="card" style="text-align:center">
+<h3>🕐 الآن في منطقتك</h3>
+<div id="clock">--:--:--</div>
+<div id="dateNow" class="tip"></div>
+<div id="sunTimes" class="gold" style="margin-top:6px;font-size:14px"></div>
+</div>
+<div class="card"><h3>🌡️ الطقس الآن</h3><p class="tip" id="winfo">جاري الجلب...</p>
+<button class="btn2" onclick="loadWeather()">🔄 تحديث</button></div>
+<div class="card"><h3>🌊 حالة البحر</h3><p class="tip" id="sinfo">جاري الجلب...</p>
+<button class="btn2" onclick="loadSea()">🔄 تحديث</button></div>
+<div class="card moonbox" id="moonBox">⏳ جاري الحساب...</div>
+</section>
+
+<section class="page" id="p-ports">
+<div class="card"><h3>⚓ الموانئ التونسية — اضغط لتحليلها 🎯</h3></div>
+<div id="portsList"></div>
+</section>
+
+<section class="page" id="p-map">
+<div class="card"><h3>🗺️ اضغط أي نقطة في البحر لتحليلها 🎯</h3></div>
+<div id="map"></div>
+<div class="card" id="report" style="margin-top:12px">
+<h3>🎯 تقرير نقطة الصيد</h3><p class="tip" id="repBody"></p></div>
+<div class="card" style="margin-top:12px">
+<h3>📍 مواقعك</h3><div id="spots" class="tip">لا توجد مواقع بعد.</div>
+<button class="btn" style="margin-top:8px" onclick="locateMe()">📍 موقعي الحالي</button></div>
+</section>
+
+<section class="page" id="p-baits">
+<div class="card"><h3>🪱 أماكن بيع الطعوم</h3></div>
+<div id="baitsList"></div>
+<div class="card" style="text-align:center"><button class="btn2" onclick="addBait()">➕ إضافة متجر</button></div>
+</section>
+
+<section class="page" id="p-chat">
+<div class="card"><h3>💬 شات الصيادين — مباشر 🔴</h3></div>
+<div class="card">
+<div id="msgs"></div>
+<input id="cname" placeholder="اسمك" maxlength="25" style="margin-top:8px">
+<div style="display:flex;gap:8px">
+<input id="cmsg" placeholder="اكتب رسالة..." maxlength="300">
+<button class="btn" style="width:auto;padding:11px 20px" onclick="sendMsg()">➤</button>
+</div>
+</div>
+</section>
+
+<section class="page" id="p-log">
+<div class="card"><h3>➕ إضافة صيدة</h3>
+<input id="fname" placeholder="نوع السمكة" maxlength="40">
+<input id="fw" type="number" step="0.1" min="0" max="999" placeholder="الوزن (كغ)">
+<input type="file" id="fphoto" accept="image/*" style="padding:8px">
+<img id="photoPreview" class="catchphoto" style="display:none" alt="صورة الصيدة">
+<button class="btn" onclick="addLog()">حفظ ✔</button></div>
+<div class="card"><h3>📈 إحصائياتك</h3>
+<div style="display:flex;gap:8px">
+<div style="flex:1;background:#0E2344;border-radius:10px;padding:10px 4px;text-align:center">
+<div style="font-size:20px;font-weight:800;color:#ff6b7a" id="stCount">0</div>
+<div style="font-size:11px;color:#B8CCE8">الصيدات</div></div>
+<div style="flex:1;background:#0E2344;border-radius:10px;padding:10px 4px;text-align:center">
+<div style="font-size:20px;font-weight:800;color:#ff6b7a" id="stWeight">0</div>
+<div style="font-size:11px;color:#B8CCE8">الوزن كغ</div></div>
+<div style="flex:1;background:#0E2344;border-radius:10px;padding:10px 4px;text-align:center">
+<div style="font-size:20px;font-weight:800;color:#ff6b7a" id="stBest">—</div>
+<div style="font-size:11px;color:#B8CCE8">أكبر سمكة</div></div>
+</div></div>
+<div class="card"><h3>📖 سجل الصيد</h3><div id="loglist" class="tip">لا توجد صيدات بعد.</div></div>
+</section>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+var LAT = 35.83, LNG = 10.64;
+
+/* ✅ إصلاح: دالة تخزين آمنة — localStorage قد يكون معطلاً (وضع التصفح الخاص) */
+function store(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; }
+  catch (e) { return false; }
+}
+function load(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+  catch (e) { return fallback; }
+}
+/* ✅ إصلاح: دالة esc عامة تُستخدم في كل مكان يُدرج فيه نص المستخدم (XSS) */
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+/* ===== الخريطة — ✅ إصلاح: نُنشئها هنا مباشرة بعد تحميل Leaflet
+        حتى لا يفشل goToPort عند الضغط بسرعة ===== */
+var map = L.map('map').setView([LAT, LNG], 8);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18, attribution: '&copy; Esri'
+}).addTo(map);
+
+var markers = [];
+function clearM() { for (var i = 0; i < markers.length; i++) map.removeLayer(markers[i]); markers = []; }
+
+function go(id, btn) {
+  var p = document.querySelectorAll('.page');
+  for (var i = 0; i < p.length; i++) p[i].classList.remove('on');
+  document.getElementById('p-' + id).classList.add('on');
+  var b = document.querySelectorAll('nav button');
+  for (var j = 0; j < b.length; j++) b[j].classList.remove('on');
+  btn.classList.add('on');
+  if (id === 'log') { renderLog(); renderStats(); }
+  if (id === 'map') setTimeout(function () { map.invalidateSize(); }, 200);
+  window.scrollTo(0, 0);
+}
+
+function tick() {
+  var n = new Date();
+  var h = n.getHours(), m = n.getMinutes(), s = n.getSeconds();
+  if (h < 10) h = '0' + h; if (m < 10) m = '0' + m; if (s < 10) s = '0' + s;
+  document.getElementById('clock').textContent = h + ':' + m + ':' + s;
+  var days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  var mo = ['جانفي','فيفري','مارس','أفريل','ماي','جوان','جويلية','أوت','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+  document.getElementById('dateNow').textContent = days[n.getDay()] + ' ' + n.getDate() + ' ' + mo[n.getMonth()] + ' ' + n.getFullYear();
+}
+tick(); setInterval(tick, 1000);
+
+(function sun() {
+  var r = Math.PI / 180;
+  var d = Math.floor((Date.now() - new Date(2024, 0, 1)) / 86400000);
+  var dec = 23.45 * r * Math.sin(2 * Math.PI * (284 + d) / 365);
+  var c = -Math.tan(LAT * r) * Math.tan(dec);
+  if (c > 1 || c < -1) return;
+  var w = Math.acos(c) / r / 15;
+  function f(t) { var h = Math.floor(t), m = Math.round((t - h) * 60); if (m === 60) { h++; m = 0; } if (h < 10) h = '0' + h; if (m < 10) m = '0' + m; return h + ':' + m; }
+  document.getElementById('sunTimes').textContent = '🌅 ' + f(12 - w - LNG / 15 + 1) + '  🌇 ' + f(12 + w - LNG / 15 + 1);
+})();
+
+function tide() { var h = new Date().getUTCHours() + new Date().getUTCMinutes() / 60; return Math.sin(2 * Math.PI * h / 12.42); }
+function tideTxt(p) {
+  if (p > 0.7) return '🌊 مد كامل';
+  if (p < -0.7) return '🌊 جزر كامل';
+  return p > 0 ? '⬆️ الماء يرتفع' : '⬇️ الماء ينحدر';
+}
+
+var PORTS = [
+  ['🏢 بيزة', 37.27, 9.87], ['🚢 La Goulette', 36.83, 10.30],
+  ['🏛️ سوسة', 35.82, 10.64], ['🕌 المهدية', 35.50, 11.06],
+  ['🐙 صفاقس', 34.73, 10.76], ['🦐 قابس', 33.88, 10.10],
+  ['🌴 جرجيس', 33.50, 11.11], ['🎣 طبربة', 37.15, 10.13]
+];
+(function renderPorts() {
+  var html = '';
+  for (var i = 0; i < PORTS.length; i++) {
+    html += '<div class="port" onclick="goToPort(' + PORTS[i][1] + ',' + PORTS[i][2] + ')">' +
+      '<b>' + PORTS[i][0] + '</b><div class="tip">' + tideTxt(tide()) + '</div></div>';
+  }
+  document.getElementById('portsList').innerHTML = html;
+})();
+
+function goToPort(lat, lng) {
+  go('map', document.querySelectorAll('nav button')[2]);
+  map.setView([lat, lng], 12);
+  L.marker([lat, lng]).addTo(map).bindPopup('⚓ ميناء').openPopup();
+  analyze(lat, lng);
+}
+
+(function moon() {
+  var syn = 29.53058867;
+  var age = ((Date.now() - new Date(2000, 0, 6, 18, 14).getTime()) / 86400000) % syn;
+  if (age < 0) age += syn;
+  var f = age / syn, icon, name, note;
+  if (f < 0.03 || f > 0.97) { icon = '🌑'; name = 'قمر جديد'; note = '🎣 ممتاز للصيد ليلياً!'; }
+  else if (f < 0.47) { icon = f < 0.28 ? '🌒' : '🌔'; name = f < 0.28 ? 'هلال متزايد' : 'أحدب متزايد'; note = '✅ جيد'; }
+  else if (f < 0.53) { icon = '🌕'; name = 'بدر كامل'; note = '🎣 رائع! الأسماك نشطة'; }
+  else { icon = '🌘'; name = 'هلال متناقص'; note = '👌 جيد — الفجر أفضل'; }
+  document.getElementById('moonBox').innerHTML =
+    '<h3>🌙 مرحلة القمر اليوم</h3><div class="mi">' + icon + '</div><div class="mt">' + name + '</div>' +
+    '<div class="md">العمر: ' + age.toFixed(1) + ' يوم</div>' +
+    '<div class="md gold">' + note + '</div>';
+})();
+
+function getJSON(url, ok, bad) {
+  fetch(url).then(function (r) {
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }).then(ok).catch(bad);
+}
+
+function loadWeather() {
+  getJSON('https://api.open-meteo.com/v1/forecast?latitude=' + LAT + '&longitude=' + LNG + '&current=temperature_2m,wind_speed_10m',
+    function (d) {
+      if (!d.current) throw new Error('bad data');
+      var w = d.current;
+      document.getElementById('winfo').innerHTML = '🌡️ ' + w.temperature_2m + '°C — 💨 ' + w.wind_speed_10m + ' كم/س<br>' +
+        (w.wind_speed_10m > 30 ? '<span class="red">⚠️ رياح قوية!</span>' : '<span class="green">✅ ظروف جيدة للصيد 🎣</span>');
+      document.getElementById('status').textContent = '🟢 متصل';
+      document.getElementById('status').className = 'ok';
+    },
+    function () {
+      document.getElementById('winfo').textContent = '⚠️ تعذر الجلب';
+      document.getElementById('status').textContent = '🔴 فشل الاتصال';
+    });
+}
+function loadSea() {
+  getJSON('https://marine-api.open-meteo.com/v1/marine?latitude=' + LAT + '&longitude=' + LNG + '&current=wave_height',
+    function (d) {
+      if (!d.current) throw new Error('bad data');
+      var wh = d.current.wave_height;
+      if (wh === null || wh === undefined) { document.getElementById('sinfo').textContent = '⚠️ لا بيانات'; return; }
+      var msg = wh < 0.8 ? '<span class="green">✅ هادئ — مثالي</span>' : wh < 1.5 ? '<span class="gold">⚠️ متوسط</span>' : '<span class="red">🚨 مضطرب!</span>';
+      document.getElementById('sinfo').innerHTML = '🌊 الموج: <b>' + wh + ' م</b><br>' + msg;
+    },
+    function () { document.getElementById('sinfo').textContent = '⚠️ تعذر الجلب'; });
+}
+loadWeather(); loadSea();
+setInterval(function () { loadWeather(); loadSea(); }, 600000);
+
+// ===== 📰 شريط الأخبار + رسائل التشجيع =====
+var TIPS = [
+  '🎣 صيد موفق للجميع!',
+  '🌅 الفجر أفضل وقت للصيد',
+  '🌇 لا تفوّت وقت الغروب — الأسماك تهاجم!',
+  '🤫 الهدوء والصبر سرّ الصياد الناجح',
+  '🌕 ليالي البدر ممتازة للصيد الليلي',
+  '🌊 بعد الموج الهادئ الأسماك تقترب من الشاطئ',
+  '🧊 حافظ على صيدك في مبرد — الطزاجة ذهب!',
+  '💨 رياح خفيفة = يوم مثالي في البحر',
+  '🎣 شارك صيدتك في السجل وشاركنا الصور!',
+  '🪱 الطعم الطازج يصطاد أكثر من العتيق'
+];
+
+(function fc() {
+  var el = document.getElementById('fcStrip');
+  var days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+  function fillTips() {
+    var h = '';
+    for (var i = 0; i < TIPS.length; i++) h += '<span class="tk gold">' + TIPS[i] + '</span>';
+    return h;
+  }
+  el.innerHTML = fillTips();
+  fetch('https://api.open-meteo.com/v1/forecast?latitude=' + LAT + '&longitude=' + LNG + '&daily=temperature_2m_max,temperature_2m_min,wind_speed_10m_max&timezone=auto')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var html = '<span class="tk gold">🔴 مباشر من البحر المتوسط — أهلاً بك أيها الصياد!</span>';
+      for (var i = 0; i < d.daily.time.length; i++) {
+        var mx = Math.round(d.daily.temperature_2m_max[i]);
+        var mn = Math.round(d.daily.temperature_2m_min[i]);
+        var w = Math.round(d.daily.wind_speed_10m_max[i]);
+        var col = w > 30 ? 'red' : w > 20 ? 'gold' : 'green';
+        var word = w > 30 ? 'رياح قوية ⚠️' : w > 20 ? 'رياح متوسطة' : 'ظروف ممتازة 🎣';
+        var day = i === 0 ? 'اليوم' : days[new Date(d.daily.time[i]).getDay()];
+        html += '<span class="tk ' + col + '">📅 ' + day + ': ' + mx + '° / ' + mn + '° — 💨 ' + w + ' كم/س — ' + word + '</span>';
+      }
+      html += fillTips();
+      el.innerHTML = html;
+    })
+    .catch(function () {
+      el.innerHTML = '<span class="tk red">⚠️ تعذر جلب التوقعات — تحقق من الإنترنت</span>' + fillTips();
+    });
+})();
+
+function analyze(lat, lng) {
+  var rep = document.getElementById('report'), body = document.getElementById('repBody');
+  rep.style.display = 'block';
+  body.textContent = '⏳ جاري التحليل...';
+  rep.scrollIntoView({ behavior: 'smooth' });
+  var wx = null, sea = null, errs = 0, gotSea = false;
+  function done() {
+    if (!wx || !gotSea) return;
+    var w = wx.current;
+    var html = '<div class="row"><span>🌡️ الجو</span><b>' + w.temperature_2m + '°C</b></div>' +
+      '<div class="row"><span>💨 الرياح</span><b>' + w.wind_speed_10m + ' كم/س</b></div>';
+    var wh = (sea && sea.current && sea.current.wave_height !== null && sea.current.wave_height !== undefined) ? sea.current.wave_height : null;
+    if (wh !== null) html += '<div class="row"><span>🌊 الموج</span><b>' + wh + ' م</b></div>';
+    html += '<div class="row"><span>🌗 المد</span><b>' + tideTxt(tide()) + '</b></div>';
+    var score = 0;
+    if (wh !== null && wh < 0.8) score += 2;
+    if (w.wind_speed_10m < 20) score += 2;
+    var hr = new Date().getHours();
+    if ((hr >= 4 && hr <= 7) || (hr >= 17 && hr <= 20)) score += 2;
+    var v = score >= 4 ? '<div class="verdict v-good">🎣 ممتاز!</div>' :
+            score >= 2 ? '<div class="verdict v-mid">👌 جيد</div>' :
+            '<div class="verdict v-bad">⚠️ ظروف صعبة</div>';
+    body.innerHTML = html + v;
+  }
+  function fail() {
+    errs++;
+    /* ✅ إصلاح: الموج قد لا يتوفر فوق اليابسة — نكمل بالطقس فقط بدل الفشل الكلي */
+    if (errs >= 2 && !wx) body.textContent = '⚠️ تعذر التحليل';
+  }
+  getJSON('https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lng + '&current=temperature_2m,wind_speed_10m',
+    function (d) { wx = d; done(); }, fail);
+  getJSON('https://marine-api.open-meteo.com/v1/marine?latitude=' + lat + '&longitude=' + lng + '&current=wave_height',
+    function (d) { sea = d; gotSea = true; done(); },
+    function () { gotSea = true; done(); }); /* ✅ لا نوقف التقرير لغياب بيانات الموج */
+}
+
+var BAITS = [
+  ['🐟 متجر صيد سوسة المركز', 'سوسة', 35.825, 10.642],
+  ['🪱 طعوم وخطاطيف المهدية', 'المهدية', 35.502, 11.065],
+  ['🎣 معدات الصيد La Goulette', 'La Goulette', 36.831, 10.305],
+  ['🦐 أعشاب بحرية صفاقس', 'صفاقس', 34.735, 10.760],
+  ['⚓ متجر القاروص بيزة', 'بيزة', 37.270, 9.870],
+  ['🐟 صيد جرجيس للطعوم', 'جرجيس', 33.503, 11.110],
+  ['🎣 طعوم قابس', 'قابس', 33.880, 10.100],
+  ['🪱 متجر طبربة للصيد', 'طبربة', 37.150, 10.130]
+];
+
+function renderBaits() {
+  var saved = load('myBaits', []);
+  var all = BAITS.concat(saved);
+  var html = '';
+  for (var i = 0; i < all.length; i++) {
+    var b = all[i];
+    html += '<div class="port"><b>' + esc(b[0]) + '</b><div class="tip">📍 ' + esc(b[1]) + '</div>' +
+      '<a href="https://www.google.com/maps/dir/?api=1&destination=' + b[2] + ',' + b[3] + '" target="_blank" rel="noopener">' +
+      '<button class="btn2" style="margin-top:6px">📍 الطريق</button></a>' +
+      (i >= BAITS.length ? ' <button class="btn2" onclick="delBait(' + (i - BAITS.length) + ')">🗑</button>' : '') +
+      '</div>';
+  }
+  document.getElementById('baitsList').innerHTML = html;
+}
+
+function addBait() {
+  var name = prompt('اسم المتجر:');
+  if (!name) return;
+  var city = prompt('المدينة:');
+  if (!city) return;
+  var saved = load('myBaits', []);
+  saved.push(['🪱 ' + name, city, LAT, LNG]);
+  if (!store('myBaits', saved)) { alert('تعذر الحفظ — الذاكرة ممتلئة'); return; }
+  renderBaits();
+}
+
+function delBait(i) {
+  var saved = load('myBaits', []);
+  saved.splice(i, 1);
+  store('myBaits', saved);
+  renderBaits();
+}
+renderBaits();
+
+/* ===== 💬 الشات — ✅ إصلاح كبير:
+   كان initializeApp برابط وهمي يرمي خطأ ويُوقف كل السكريبت بعده.
+   الآن نتحقق من الرابط أولاً — الشات يعمل فقط عند إضافة رابط حقيقي. ===== */
+var chatOK = false, chatRef = null;
+(function initChat() {
+  var FB_URL = ""; /* ⚙️ ضع رابط Firebase Realtime Database هنا مثل:
+                      "https://اسم-مشروعك-default-rtdb.firebaseio.com" */
+  if (!FB_URL || typeof firebase === 'undefined') {
+    document.getElementById('msgs').innerHTML =
+      '<div class="item" style="flex-direction:column;align-items:flex-start">' +
+      '<span class="tip gold">⚙️ الشات غير مُفعّل حالياً — أضف رابط Firebase في الكود (متغير FB_URL) لتفعيله.</span></div>';
+    return;
+  }
+  try {
+    firebase.initializeApp({ databaseURL: FB_URL });
+    chatRef = firebase.database().ref('chat');
+    chatOK = true;
+    var myName = localStorage.getItem('myName') || '';
+    if (myName) document.getElementById('cname').value = myName;
+    chatRef.limitToLast(50).on('child_added', function (snap) {
+      var v = snap.val();
+      if (!v || !v.n || !v.m) return; /* ✅ تجاهل الرسائل التالفة */
+      var box = document.getElementById('msgs');
+      var mine = v.n === localStorage.getItem('myName');
+      box.innerHTML += '<div class="item" style="flex-direction:column;align-items:flex-start;' +
+        (mine ? ';border:1px solid #ff2d3a' : '') + '">' +
+        '<b class="gold">' + esc(v.n) + ' <small>' + new Date(v.t || Date.now()).toLocaleTimeString('ar-TN') + '</small></b>' +
+        '<span class="tip">' + esc(v.m) + '</span></div>';
+      box.scrollTop = box.scrollHeight;
+    });
+  } catch (e) {
+    document.getElementById('msgs').innerHTML =
+      '<div class="item"><span class="tip red">⚠️ تعذر الاتصال بالشات</span></div>';
+  }
+})();
+
+function sendMsg() {
+  if (!chatOK) { alert('الشات غير مُفعّل — أضف رابط Firebase في الكود'); return; }
+  var name = document.getElementById('cname').value.trim();
+  var msg = document.getElementById('cmsg').value.trim();
+  if (!name || !msg) { alert('اكتب اسمك ورسالتك!'); return; }
+  localStorage.setItem('myName', name);
+  chatRef.push({ n: name, m: msg, t: Date.now() });
+  document.getElementById('cmsg').value = '';
+}
+
+/* ===== 📖 سجل الصيد ===== */
+var photo = null;
+document.getElementById('fphoto').addEventListener('change', function (e) {
+  var f = e.target.files[0];
+  if (!f) return;
+  if (f.size > 10 * 1024 * 1024) { alert('الصورة كبيرة جداً (الحد 10MB)'); e.target.value = ''; return; }
+  var r = new FileReader();
+  r.onload = function (ev) {
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      var sc = Math.min(1, 600 / img.width);
+      c.width = img.width sc; c.height = img.height * sc;
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      photo = c.toDataURL('image/jpeg', 0.7);
+      var pv = document.getElementById('photoPreview');
+      pv.src = photo; pv.style.display = 'block';
+    };
+    img.onerror = function () { alert('تعذر قراءة الصورة'); };
+    img.src = ev.target.result;
+  };
+  r.readAsDataURL(f);
+});
+
+function addLog() {
+  var name = document.getElementById('fname').value.trim();
+  var w = parseFloat(document.getElementById('fw').value) || 0;
+  if (!name) { alert('أدخل نوع السمكة!'); return; }
+  var logs = load('catches', []);
+  logs.unshift({ n: name, w: w, d: new Date().toLocaleDateString('ar-TN'), p: photo });
+  if (!store('catches', logs)) {
+    logs[0].p = null;
+    store('catches', logs);
+    alert('الذاكرة ممتلئة — حُفظت بدون صورة');
+  }
+  photo = null;
+  document.getElementById('fname').value = '';
+  document.getElementById('fw').value = '';
+  document.getElementById('photoPreview').style.display = 'none';
+  document.getElementById('fphoto').value = '';
+  renderLog(); renderStats();
+}
+
+function delLog(i) {
+  var logs = load('catches', []);
+  logs.splice(i, 1);
+  store('catches', logs);
+  renderLog(); renderStats();
+}
+
+function renderLog() {
+  var logs = load('catches', []);
+  var box = document.getElementById('loglist');
+  if (!logs.length) { box.innerHTML = 'لا توجد صيدات بعد.'; return; }
+  var html = '';
+  for (var i = 0; i < logs.length; i++) {
+    html += '<div class="item">' +
+      (logs[i].p ? '<img src="' + logs[i].p + '" class="catchphoto" alt="صيدة">' : '') +
+      '<span>' + esc(logs[i].n) + ' — ' + logs[i].w + ' كغ <small>' + esc(logs[i].d) + '</small></span>' +
+      '<button onclick="delLog(' + i + ')">🗑</button></div>';
+  }
+  box.innerHTML = html;
+}
+
+function renderStats() {
+  var logs = load('catches', []);
+  var total
+
+> ⚠️ The response reached the length limit. Reply **continue** to get the rest.
